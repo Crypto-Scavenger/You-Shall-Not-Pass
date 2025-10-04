@@ -1,8 +1,9 @@
 <?php
 /**
- * Uninstall script for You Shall Not Pass
+ * Uninstall script for Add Some Solt
  *
- * @package YouShallNotPass
+ * @package AddSomeSolt
+ * @since   1.0.0
  */
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
@@ -11,18 +12,19 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-$table_name = $wpdb->prefix . 'ysnp_settings';
+$settings_table = $wpdb->prefix . 'ass_settings';
 
-$cleanup = $wpdb->get_var(
-	$wpdb->prepare(
-		'SELECT setting_value FROM %i WHERE setting_key = %s',
-		$table_name,
-		'cleanup_on_uninstall'
-	)
-);
+$cleanup = $wpdb->get_var( $wpdb->prepare(
+	"SELECT setting_value FROM `{$settings_table}` WHERE setting_key = %s",
+	'cleanup_on_uninstall'
+) );
 
 if ( '1' === $cleanup ) {
-	$wpdb->query(
-		$wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table_name )
-	);
+	require_once plugin_dir_path( __FILE__ ) . 'includes/class-database.php';
+	
+	$database = new ASS_Database();
+	$database->delete_all_data();
+	
+	wp_clear_scheduled_hook( 'ass_scheduled_key_change' );
+	wp_clear_scheduled_hook( 'ass_send_reminder' );
 }

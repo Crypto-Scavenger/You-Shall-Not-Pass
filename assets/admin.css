@@ -1,46 +1,84 @@
 /**
- * Admin styles for You Shall Not Pass
- * Clean and minimal
+ * Admin styles for Add Some Solt
  *
- * @package YouShallNotPass
+ * @package AddSomeSolt
+ * @since   1.0.0
  */
 
-.ysnp-admin .nav-tab-wrapper {
-	margin-bottom: 20px;
-}
-
-.ysnp-admin .ysnp-tab-content {
-	display: none;
-}
-
-.ysnp-admin .ysnp-tab-active {
-	display: block;
-}
-
-.ysnp-admin .form-table th {
-	width: 250px;
-	font-weight: 600;
-	padding-left: 0;
-}
-
-.ysnp-admin .form-table td {
-	padding: 15px 10px;
-}
-
-.ysnp-admin .form-table .description {
-	margin-top: 8px;
-	color: #646970;
-	font-style: italic;
-}
-
-.ysnp-admin h2 {
+.ass-admin-page h2 {
 	margin-top: 2em;
 	padding-top: 1em;
 	border-top: 1px solid #dcdcde;
 }
 
-.ysnp-admin h2:first-of-type {
+.ass-admin-page h2:first-of-type {
 	margin-top: 1em;
 	padding-top: 0;
 	border-top: none;
+}
+
+.ass-status-box {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left-width: 4px;
+	padding: 15px;
+	margin: 20px 0;
+}
+
+.ass-status-success {
+	border-left-color: #00a32a;
+	color: #00a32a;
+}
+
+.ass-status-success .dashicons {
+	color: #00a32a;
+}
+
+.ass-status-error {
+	border-left-color: #d63638;
+	color: #d63638;
+}
+
+.ass-status-error .dashicons {
+	color: #d63638;
+}
+
+.ass-status-box p {
+	margin: 0.5em 0;
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.ass-status-box .dashicons {
+	margin-right: 5px;
+	vertical-align: middle;
+}
+
+.ass-keys-container {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	padding: 15px;
+	margin: 15px 0;
+}
+
+.ass-key-value {
+	font-family: Consolas, Monaco, monospace;
+	font-size: 11px;
+	word-break: break-all;
+	display: block;
+	padding: 5px;
+	background: #f6f7f7;
+}
+
+.ass-settings-form .form-table th {
+	padding-left: 0;
+}
+
+.ass-settings-form .form-table td label {
+	font-weight: 500;
+}
+
+.ass-settings-form .description {
+	margin-top: 8px;
+	font-style: italic;
 }

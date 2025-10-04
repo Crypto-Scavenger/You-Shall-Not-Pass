@@ -1,200 +1,198 @@
 <?php
 /**
- * Database operations for You Shall Not Pass
+ * Database operations for Add Some Solt
  *
- * @package YouShallNotPass
+ * @package AddSomeSolt
+ * @since   1.0.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class YSNP_Database {
-	
-	private $cache_group = 'ysnp_settings';
+class ASS_Database {
+
 	private $table_verified = null;
-	
-	/**
-	 * Get table name
-	 *
-	 * @return string
-	 */
-	private function get_table_name() {
-		global $wpdb;
-		return $wpdb->prefix . 'ysnp_settings';
-	}
-	
-	/**
-	 * Activation hook
-	 */
+	private $log_table_verified = null;
+	private $settings_cache = null;
+	private $cache_key = 'ass_settings_cache';
+	private $cache_expiration = 43200;
+
 	public static function activate() {
 		$instance = new self();
-		$instance->create_table();
-		$instance->insert_defaults();
+		$instance->create_tables();
 	}
-	
-	/**
-	 * Ensure table exists before operations
-	 *
-	 * @return bool
-	 */
+
+	private function create_tables() {
+		global $wpdb;
+		
+		$settings_table = $wpdb->prefix . 'ass_settings';
+		$log_table = $wpdb->prefix . 'ass_change_log';
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql_settings = "CREATE TABLE IF NOT EXISTS `{$settings_table}` (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			setting_key varchar(191) NOT NULL,
+			setting_value longtext,
+			PRIMARY KEY (id),
+			UNIQUE KEY setting_key (setting_key)
+		) {$charset_collate}";
+
+		$sql_log = "CREATE TABLE IF NOT EXISTS `{$log_table}` (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			change_date datetime NOT NULL,
+			changed_by bigint(20) unsigned,
+			change_type varchar(50) NOT NULL,
+			notes text,
+			PRIMARY KEY (id),
+			KEY change_date (change_date)
+		) {$charset_collate}";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql_settings );
+		dbDelta( $sql_log );
+
+		$defaults = array(
+			'schedule_enabled' => '0',
+			'schedule_frequency' => 'quarterly',
+			'schedule_day' => '1',
+			'schedule_time' => '03:00',
+			'email_notifications' => '1',
+			'notification_email' => get_option( 'admin_email' ),
+			'reminder_enabled' => '0',
+			'reminder_days' => '7',
+			'cleanup_on_uninstall' => '1',
+		);
+
+		foreach ( $defaults as $key => $value ) {
+			$existing = $wpdb->get_var( $wpdb->prepare(
+				"SELECT id FROM `{$settings_table}` WHERE setting_key = %s",
+				$key
+			) );
+
+			if ( ! $existing ) {
+				$wpdb->insert(
+					$settings_table,
+					array(
+						'setting_key' => $key,
+						'setting_value' => $value,
+					),
+					array( '%s', '%s' )
+				);
+			}
+		}
+	}
+
 	private function ensure_table_exists() {
 		if ( true === $this->table_verified ) {
 			return true;
 		}
-		
+
 		global $wpdb;
-		$table_name = $this->get_table_name();
-		
+		$table_name = $wpdb->prefix . 'ass_settings';
+
 		$table_exists = $wpdb->get_var( $wpdb->prepare(
 			'SHOW TABLES LIKE %s',
 			$table_name
 		) );
-		
+
 		if ( $table_name === $table_exists ) {
 			$this->table_verified = true;
 			return true;
 		}
-		
-		$this->create_table();
-		
+
+		$this->create_tables();
+
 		$table_exists = $wpdb->get_var( $wpdb->prepare(
 			'SHOW TABLES LIKE %s',
 			$table_name
 		) );
-		
+
 		if ( $table_name === $table_exists ) {
 			$this->table_verified = true;
-			$this->insert_defaults();
 			return true;
 		}
-		
+
 		return false;
 	}
-	
-	/**
-	 * Create database table
-	 */
-	private function create_table() {
-		global $wpdb;
-		
-		$table_name = $this->get_table_name();
-		$charset_collate = $wpdb->get_charset_collate();
-		
-		$sql = $wpdb->prepare(
-			'CREATE TABLE IF NOT EXISTS %i (
-				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-				setting_key varchar(191) NOT NULL,
-				setting_value longtext,
-				PRIMARY KEY (id),
-				UNIQUE KEY setting_key (setting_key)
-			)',
-			$table_name
-		) . ' ' . $charset_collate;
-		
-		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql );
-	}
-	
-	/**
-	 * Insert default settings
-	 */
-	private function insert_defaults() {
-		$defaults = array(
-			'enabled'                => '1',
-			'page_title'             => 'Access Restricted',
-			'page_heading'           => 'You Shall Not Pass',
-			'page_message'           => 'This content is restricted. Please log in to access.',
-			'show_logo'              => '1',
-			'logo_text'              => 'RESTRICTED AREA',
-			'form_username_label'    => 'Username',
-			'form_password_label'    => 'Password',
-			'form_button_text'       => 'Enter',
-			'form_remember_label'    => 'Remember Me',
-			'show_remember'          => '1',
-			'show_lost_password'     => '1',
-			'lost_password_text'     => 'Lost your password?',
-			'background_color'       => '#262626',
-			'text_color'             => '#ffffff',
-			'accent_color'           => '#d11c1c',
-			'form_bg_color'          => 'rgba(38, 38, 38, 0.9)',
-			'form_border_color'      => '#d11c1c',
-			'input_bg_color'         => 'rgba(0, 0, 0, 0.5)',
-			'input_text_color'       => '#ffffff',
-			'input_border_color'     => 'rgba(209, 28, 28, 0.3)',
-			'button_bg_color'        => '#d11c1c',
-			'button_text_color'      => '#ffffff',
-			'button_hover_color'     => '#ff1c1c',
-			'custom_css'             => '',
-			'cleanup_on_uninstall'   => '0',
-		);
-		
-		foreach ( $defaults as $key => $value ) {
-			$existing = $this->get_setting( $key );
-			if ( false === $existing ) {
-				$this->save_setting( $key, $value );
-			}
+
+	private function ensure_log_table_exists() {
+		if ( true === $this->log_table_verified ) {
+			return true;
 		}
+
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'ass_change_log';
+
+		$table_exists = $wpdb->get_var( $wpdb->prepare(
+			'SHOW TABLES LIKE %s',
+			$table_name
+		) );
+
+		if ( $table_name === $table_exists ) {
+			$this->log_table_verified = true;
+			return true;
+		}
+
+		$this->create_tables();
+
+		$table_exists = $wpdb->get_var( $wpdb->prepare(
+			'SHOW TABLES LIKE %s',
+			$table_name
+		) );
+
+		if ( $table_name === $table_exists ) {
+			$this->log_table_verified = true;
+			return true;
+		}
+
+		return false;
 	}
-	
-	/**
-	 * Get a single setting
-	 *
-	 * @param string $key Setting key
-	 * @param mixed $default Default value
-	 * @return mixed
-	 */
+
 	public function get_setting( $key, $default = false ) {
 		if ( ! $this->ensure_table_exists() ) {
 			return $default;
 		}
-		
-		$cache_key = 'setting_' . $key;
-		$cached = wp_cache_get( $cache_key, $this->cache_group );
-		
-		if ( false !== $cached ) {
-			return $cached;
+
+		$cache = get_transient( $this->cache_key );
+		if ( false !== $cache && isset( $cache[ $key ] ) ) {
+			return $cache[ $key ];
 		}
-		
+
 		global $wpdb;
-		$table_name = $this->get_table_name();
-		
+		$table_name = $wpdb->prefix . 'ass_settings';
+
 		$value = $wpdb->get_var( $wpdb->prepare(
-			'SELECT setting_value FROM %i WHERE setting_key = %s',
-			$table_name,
+			"SELECT setting_value FROM `{$table_name}` WHERE setting_key = %s",
 			$key
 		) );
-		
+
 		if ( null === $value ) {
-			wp_cache_set( $cache_key, $default, $this->cache_group, 3600 );
 			return $default;
 		}
-		
-		wp_cache_set( $cache_key, $value, $this->cache_group, 3600 );
+
+		if ( false === $cache ) {
+			$cache = array();
+		}
+		$cache[ $key ] = $value;
+		set_transient( $this->cache_key, $cache, $this->cache_expiration );
+
 		return $value;
 	}
-	
-	/**
-	 * Save a setting
-	 *
-	 * @param string $key Setting key
-	 * @param mixed $value Setting value
-	 * @return bool
-	 */
-	public function save_setting( $key, $value ) {
+
+	public function save_setting( $key, $value, $skip_cache_clear = false ) {
 		if ( ! $this->ensure_table_exists() ) {
 			return false;
 		}
-		
+
 		global $wpdb;
-		$table_name = $this->get_table_name();
-		
+		$table_name = $wpdb->prefix . 'ass_settings';
+
 		$existing = $wpdb->get_var( $wpdb->prepare(
-			'SELECT id FROM %i WHERE setting_key = %s',
-			$table_name,
+			"SELECT id FROM `{$table_name}` WHERE setting_key = %s",
 			$key
 		) );
-		
+
 		if ( $existing ) {
 			$result = $wpdb->update(
 				$table_name,
@@ -207,84 +205,116 @@ class YSNP_Database {
 			$result = $wpdb->insert(
 				$table_name,
 				array(
-					'setting_key'   => $key,
+					'setting_key' => $key,
 					'setting_value' => $value,
 				),
 				array( '%s', '%s' )
 			);
 		}
-		
-		$cache_key = 'setting_' . $key;
-		wp_cache_delete( $cache_key, $this->cache_group );
-		wp_cache_delete( 'all_settings', $this->cache_group );
-		
-		return false !== $result;
+
+		if ( false === $result ) {
+			return false;
+		}
+
+		if ( ! $skip_cache_clear ) {
+			delete_transient( $this->cache_key );
+		}
+
+		return true;
 	}
-	
-	/**
-	 * Get all settings
-	 *
-	 * @return array
-	 */
+
 	public function get_all_settings() {
+		if ( null !== $this->settings_cache ) {
+			return $this->settings_cache;
+		}
+
 		if ( ! $this->ensure_table_exists() ) {
 			return array();
 		}
-		
-		$cached = wp_cache_get( 'all_settings', $this->cache_group );
-		
-		if ( false !== $cached ) {
-			return $cached;
+
+		$cache = get_transient( $this->cache_key );
+		if ( false !== $cache ) {
+			$this->settings_cache = $cache;
+			return $cache;
 		}
-		
+
 		global $wpdb;
-		$table_name = $this->get_table_name();
-		
+		$table_name = $wpdb->prefix . 'ass_settings';
+
 		$results = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT setting_key, setting_value FROM %i',
-				$table_name
-			),
+			"SELECT setting_key, setting_value FROM `{$table_name}`",
 			ARRAY_A
 		);
-		
+
 		$settings = array();
-		
-		if ( $results ) {
+		if ( is_array( $results ) ) {
 			foreach ( $results as $row ) {
 				$settings[ $row['setting_key'] ] = $row['setting_value'];
 			}
 		}
-		
-		wp_cache_set( 'all_settings', $settings, $this->cache_group, 3600 );
-		
+
+		set_transient( $this->cache_key, $settings, $this->cache_expiration );
+		$this->settings_cache = $settings;
+
 		return $settings;
 	}
-	
-	/**
-	 * Delete a setting
-	 *
-	 * @param string $key Setting key
-	 * @return bool
-	 */
-	public function delete_setting( $key ) {
-		if ( ! $this->ensure_table_exists() ) {
+
+	public function log_change( $change_type, $notes = '' ) {
+		if ( ! $this->ensure_log_table_exists() ) {
 			return false;
 		}
-		
+
 		global $wpdb;
-		$table_name = $this->get_table_name();
-		
-		$result = $wpdb->delete(
+		$table_name = $wpdb->prefix . 'ass_change_log';
+
+		$user_id = get_current_user_id();
+		if ( 0 === $user_id && defined( 'DOING_CRON' ) && DOING_CRON ) {
+			$user_id = null;
+		}
+
+		$result = $wpdb->insert(
 			$table_name,
-			array( 'setting_key' => $key ),
-			array( '%s' )
+			array(
+				'change_date' => current_time( 'mysql' ),
+				'changed_by' => $user_id,
+				'change_type' => $change_type,
+				'notes' => $notes,
+			),
+			array( '%s', '%d', '%s', '%s' )
 		);
-		
-		$cache_key = 'setting_' . $key;
-		wp_cache_delete( $cache_key, $this->cache_group );
-		wp_cache_delete( 'all_settings', $this->cache_group );
-		
+
 		return false !== $result;
+	}
+
+	public function get_change_log( $limit = 50 ) {
+		if ( ! $this->ensure_log_table_exists() ) {
+			return array();
+		}
+
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'ass_change_log';
+
+		$results = $wpdb->get_results( $wpdb->prepare(
+			"SELECT * FROM `{$table_name}` ORDER BY change_date DESC LIMIT %d",
+			$limit
+		), ARRAY_A );
+
+		if ( ! is_array( $results ) ) {
+			return array();
+		}
+
+		return $results;
+	}
+
+	public function delete_all_data() {
+		global $wpdb;
+		
+		$settings_table = $wpdb->prefix . 'ass_settings';
+		$log_table = $wpdb->prefix . 'ass_change_log';
+
+		$wpdb->query( "DROP TABLE IF EXISTS `{$settings_table}`" );
+		$wpdb->query( "DROP TABLE IF EXISTS `{$log_table}`" );
+
+		delete_transient( $this->cache_key );
 	}
 }
