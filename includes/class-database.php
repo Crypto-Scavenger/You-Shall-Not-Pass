@@ -11,23 +11,74 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class YSNP_Database {
 	
-	private $table_name;
 	private $cache_group = 'ysnp_settings';
+	private $table_verified = null;
 	
-	public function __construct() {
+	/**
+	 * Get table name
+	 *
+	 * @return string
+	 */
+	private function get_table_name() {
 		global $wpdb;
-		$this->table_name = $wpdb->prefix . 'ysnp_settings';
+		return $wpdb->prefix . 'ysnp_settings';
 	}
 	
+	/**
+	 * Activation hook
+	 */
 	public static function activate() {
 		$instance = new self();
 		$instance->create_table();
 		$instance->insert_defaults();
 	}
 	
+	/**
+	 * Ensure table exists before operations
+	 *
+	 * @return bool
+	 */
+	private function ensure_table_exists() {
+		if ( true === $this->table_verified ) {
+			return true;
+		}
+		
+		global $wpdb;
+		$table_name = $this->get_table_name();
+		
+		$table_exists = $wpdb->get_var( $wpdb->prepare(
+			'SHOW TABLES LIKE %s',
+			$table_name
+		) );
+		
+		if ( $table_name === $table_exists ) {
+			$this->table_verified = true;
+			return true;
+		}
+		
+		$this->create_table();
+		
+		$table_exists = $wpdb->get_var( $wpdb->prepare(
+			'SHOW TABLES LIKE %s',
+			$table_name
+		) );
+		
+		if ( $table_name === $table_exists ) {
+			$this->table_verified = true;
+			$this->insert_defaults();
+			return true;
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Create database table
+	 */
 	private function create_table() {
 		global $wpdb;
 		
+		$table_name = $this->get_table_name();
 		$charset_collate = $wpdb->get_charset_collate();
 		
 		$sql = $wpdb->prepare(
@@ -37,15 +88,17 @@ class YSNP_Database {
 				setting_value longtext,
 				PRIMARY KEY (id),
 				UNIQUE KEY setting_key (setting_key)
-			) %s',
-			$this->table_name,
-			$charset_collate
-		);
+			)',
+			$table_name
+		) . ' ' . $charset_collate;
 		
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 	}
 	
+	/**
+	 * Insert default settings
+	 */
 	private function insert_defaults() {
 		$defaults = array(
 			'enabled'                => '1',
@@ -84,85 +137,154 @@ class YSNP_Database {
 		}
 	}
 	
+	/**
+	 * Get a single setting
+	 *
+	 * @param string $key Setting key
+	 * @param mixed $default Default value
+	 * @return mixed
+	 */
 	public function get_setting( $key, $default = false ) {
+		if ( ! $this->ensure_table_exists() ) {
+			return $default;
+		}
+		
 		$cache_key = 'setting_' . $key;
-		$cached    = wp_cache_get( $cache_key, $this->cache_group );
+		$cached = wp_cache_get( $cache_key, $this->cache_group );
 		
 		if ( false !== $cached ) {
 			return $cached;
 		}
 		
 		global $wpdb;
+		$table_name = $this->get_table_name();
 		
-		$value = $wpdb->get_var(
-			$wpdb->prepare(
-				'SELECT setting_value FROM %i WHERE setting_key = %s',
-				$this->table_name,
-				$key
-			)
-		);
+		$value = $wpdb->get_var( $wpdb->prepare(
+			'SELECT setting_value FROM %i WHERE setting_key = %s',
+			$table_name,
+			$key
+		) );
 		
 		if ( null === $value ) {
+			wp_cache_set( $cache_key, $default, $this->cache_group, 3600 );
 			return $default;
 		}
 		
-		wp_cache_set( $cache_key, $value, $this->cache_group );
-		
+		wp_cache_set( $cache_key, $value, $this->cache_group, 3600 );
 		return $value;
 	}
 	
+	/**
+	 * Save a setting
+	 *
+	 * @param string $key Setting key
+	 * @param mixed $value Setting value
+	 * @return bool
+	 */
 	public function save_setting( $key, $value ) {
+		if ( ! $this->ensure_table_exists() ) {
+			return false;
+		}
+		
 		global $wpdb;
+		$table_name = $this->get_table_name();
 		
-		$result = $wpdb->replace(
-			$this->table_name,
-			array(
-				'setting_key'   => $key,
-				'setting_value' => $value,
-			),
-			array( '%s', '%s' )
-		);
+		$existing = $wpdb->get_var( $wpdb->prepare(
+			'SELECT id FROM %i WHERE setting_key = %s',
+			$table_name,
+			$key
+		) );
 		
-		if ( false === $result ) {
-			return new WP_Error( 'db_error', __( 'Failed to save setting', 'you-shall-not-pass' ) );
+		if ( $existing ) {
+			$result = $wpdb->update(
+				$table_name,
+				array( 'setting_value' => $value ),
+				array( 'setting_key' => $key ),
+				array( '%s' ),
+				array( '%s' )
+			);
+		} else {
+			$result = $wpdb->insert(
+				$table_name,
+				array(
+					'setting_key'   => $key,
+					'setting_value' => $value,
+				),
+				array( '%s', '%s' )
+			);
 		}
 		
 		$cache_key = 'setting_' . $key;
 		wp_cache_delete( $cache_key, $this->cache_group );
+		wp_cache_delete( 'all_settings', $this->cache_group );
 		
-		return true;
+		return false !== $result;
 	}
 	
+	/**
+	 * Get all settings
+	 *
+	 * @return array
+	 */
 	public function get_all_settings() {
+		if ( ! $this->ensure_table_exists() ) {
+			return array();
+		}
+		
+		$cached = wp_cache_get( 'all_settings', $this->cache_group );
+		
+		if ( false !== $cached ) {
+			return $cached;
+		}
+		
 		global $wpdb;
+		$table_name = $this->get_table_name();
 		
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT setting_key, setting_value FROM %i',
-				$this->table_name
+				$table_name
 			),
 			ARRAY_A
 		);
 		
-		if ( null === $results ) {
-			return array();
+		$settings = array();
+		
+		if ( $results ) {
+			foreach ( $results as $row ) {
+				$settings[ $row['setting_key'] ] = $row['setting_value'];
+			}
 		}
 		
-		$settings = array();
-		foreach ( $results as $row ) {
-			$settings[ $row['setting_key'] ] = $row['setting_value'];
-		}
+		wp_cache_set( 'all_settings', $settings, $this->cache_group, 3600 );
 		
 		return $settings;
 	}
 	
-	public function delete_all_data() {
+	/**
+	 * Delete a setting
+	 *
+	 * @param string $key Setting key
+	 * @return bool
+	 */
+	public function delete_setting( $key ) {
+		if ( ! $this->ensure_table_exists() ) {
+			return false;
+		}
+		
 		global $wpdb;
+		$table_name = $this->get_table_name();
 		
-		wp_cache_flush_group( $this->cache_group );
-		
-		$wpdb->query(
-			$wpdb->prepare( 'DROP TABLE IF EXISTS %i', $this->table_name )
+		$result = $wpdb->delete(
+			$table_name,
+			array( 'setting_key' => $key ),
+			array( '%s' )
 		);
+		
+		$cache_key = 'setting_' . $key;
+		wp_cache_delete( $cache_key, $this->cache_group );
+		wp_cache_delete( 'all_settings', $this->cache_group );
+		
+		return false !== $result;
 	}
 }
