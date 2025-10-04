@@ -1,0 +1,46 @@
+/**
+ * Admin styles for You Shall Not Pass
+ * Clean and minimal
+ *
+ * @package YouShallNotPass
+ */
+
+.ysnp-admin .nav-tab-wrapper {
+	margin-bottom: 20px;
+}
+
+.ysnp-admin .ysnp-tab-content {
+	display: none;
+}
+
+.ysnp-admin .ysnp-tab-active {
+	display: block;
+}
+
+.ysnp-admin .form-table th {
+	width: 250px;
+	font-weight: 600;
+	padding-left: 0;
+}
+
+.ysnp-admin .form-table td {
+	padding: 15px 10px;
+}
+
+.ysnp-admin .form-table .description {
+	margin-top: 8px;
+	color: #646970;
+	font-style: italic;
+}
+
+.ysnp-admin h2 {
+	margin-top: 2em;
+	padding-top: 1em;
+	border-top: 1px solid #dcdcde;
+}
+
+.ysnp-admin h2:first-of-type {
+	margin-top: 1em;
+	padding-top: 0;
+	border-top: none;
+}
